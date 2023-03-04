@@ -26,7 +26,7 @@ thread_lock = Lock()
 
 def background_task():
     while True:
-        sio.sleep(0.01)
+        sio.sleep(0.1)
         screen_data = capture.grabScreen()
         if screen_data:
             sio.emit('image_change', {'data': screen_data })
@@ -60,8 +60,6 @@ def handle_rightclick():
 
 @sio.on('key')
 def handle_mouse(message):
-    with open("JSKey.txt", "a") as f:
-        f.write(message['key']+"\n")
     capture.keypress(message['key'], message['alt'], message['ctrl'], message['shift'])
 
 @sio.on('log')

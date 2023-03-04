@@ -57,9 +57,14 @@ def grabScreen(new_session=False):
                     if not new_image.get(x):
                         new_image[x] = {}
                     new_image[x][y] = b64str
-                    CURRENT_SCREEN[(x,y)] = b64str
+                    if not CURRENT_SCREEN.get(x):
+                        CURRENT_SCREEN[x] = {}
+                    CURRENT_SCREEN[x][y] = b64str
  
-    return new_image
+    if new_session:
+        return CURRENT_SCREEN
+    else:
+        return new_image
 
 class POINT(Structure):
     _fields_ = [("x", c_long), ("y", c_long)]
@@ -87,7 +92,7 @@ def rightclick():
     windll.user32.mouse_event(MOUSEEVENTF_RIGHTCLICK, 0, 0, 0, 0)
 
 def keypress(key, alt=False, ctrl=False, shift=False):
-    vk_key = {
+    key_map = {
         "KeyA": 0x41,
         "KeyB": 0x42,
         "KeyC": 0x43,
@@ -228,11 +233,12 @@ def keypress(key, alt=False, ctrl=False, shift=False):
         "VolumeMute": 0xAD,
         "VolumeDown": 0xAE,
         "VolumeUp": 0xAF,
-    }.get(key)
+    }
+    vk_key = key_map.get(key)
     if vk_key:
-        shift_key = vk_key.get("Shift")
-        ctrl_key = vk_key.get("Ctrl")
-        alt_key = vk_key.get("Alt")
+        shift_key = key_map.get("Shift")
+        ctrl_key = key_map.get("Ctrl")
+        alt_key = key_map.get("Alt")
         if shift: windll.user32.keybd_event(shift_key, 0, 0, 0)
         if ctrl: windll.user32.keybd_event(ctrl_key, 0, 0, 0)
         if alt: windll.user32.keybd_event(alt_key, 0, 0, 0)
