@@ -1,0 +1,132 @@
+<html>
+    <head>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                background-color: black;
+            }
+            .imgbox {
+                display: grid;
+                height: 100%;
+            }
+            .center-fit {
+                max-width: 100%;
+                max-height: 100vh;
+                margin: auto;
+            }
+            
+            img {
+                display:block;
+                width:100%;
+                height:100%;
+            }
+
+        </style>
+    </head>
+    <body>
+        <div class="imgbox">
+            <div id="desktop" class="center-fit">
+                <table cellspacing="0">
+                    {%for y in range(0, width)%}
+                        <tr>
+                            {%for x in range(0, height)%}
+                                <td><img id="desktop-{{ '{:03d}'.format(x) }}{{ '{:03d}'.format(y) }}" src={{data[x][y]}}></td>
+                            {%endfor%}
+                        </tr>
+                    {%endfor%}
+                </table>
+            </div>
+        </div>
+        <script src="https://cdn.socket.io/4.4.1/socket.io.min.js" integrity="sha384-fKnu0iswBIqkjxrhQCTZ7qlLHOFEgNkRmK2vaO/LbTZSXdJfAu6ewRBdwHPhBo/H" crossorigin="anonymous"></script>
+        <script type="text/javascript">
+        (() => {
+            var desktop = document.getElementById("desktop");
+            prompt()
+            var mousemoved = false;
+            var mousebtn = 0;
+            var executed = 0;
+
+            const sock = io();
+
+            sock.on('image_change', data => {
+                for (const row in data.data) {
+                    for (const col in data.data) {
+                        var chunk = document.getElementById(
+                            "desktop-"
+                            +String(row).padStart(3, '0')
+                            +String(col).padStart(3, '0')
+                        );
+                        if (chunk !== null){
+                            var d = data.data[row][col];
+                            if (d !== undefined) {chunk.src = d;}
+                        }
+                    }
+                };
+            });
+            
+            function handleMouseMove(event) {
+                var rect = desktop.getBoundingClientRect();
+                
+                mousemoved = true;
+                
+                if (event.targetTouches) {
+                    if (event.targetTouches.length==1) {
+                        // One finger move
+                        mousePos = {
+                            x: (event.targetTouches[0].pageX - rect.left)/rect.width,
+                            y: (event.targetTouches[0].pageY - rect.top)/rect.height
+                        };
+                        sock.emit('mouse', {'pos':mousePos});
+                    }
+                }
+                else {
+                    // Cursor move
+                    mousePos = {
+                        x: (event.pageX - rect.left)/rect.width,
+                        y: (event.pageY - rect.top)/rect.height
+                    };
+                    sock.emit('mouse', {'pos':mousePos});
+                }
+            }
+
+            function handleTouchStart(event) {
+                mousemoved = false;
+                mousebtn = event.targetTouches.length;
+                executed = 0;
+            }
+
+            function handleTouchEnd(event) {
+                if (!mousemoved) {
+                    if (mousebtn==2) {
+                        if (executed==0) {
+                            executed = 1;
+                            sock.emit('rightclick');
+                        }
+                    } else {
+                        sock.emit('mouseclick');
+                    }
+                };
+            }
+
+            function handleKeypress(event) {
+                event.preventDefault()
+                event = event || window.event;
+                sock.emit('key', {
+                    'key':event.code, 
+                    'alt':event.altKey, 
+                    'ctrl':event.ctrlKey, 
+                    'shift':event.shiftKey
+                });
+            }
+            
+            desktop.focus()
+            desktop.onmousemove = handleMouseMove;
+            desktop.ontouchmove = handleMouseMove;
+            desktop.ontouchstart = handleTouchStart;
+            desktop.ontouchend = handleTouchEnd;
+            window.onkeydown = handleKeypress;
+        })();
+        </script>
+    </body>
+</html>
