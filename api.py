@@ -31,12 +31,44 @@ def background_task():
         if screen_data:
             sio.emit('image_change', {'data': screen_data })
 
+        # # Get frame generator
+        # gen = capture.ffmpegGrab()
+
+        # new_image = {}
+        # while True:
+        #     # Read next frame from ffmpeg
+        #     frame_array = next(gen)
+        #     for x in range(capture.SCREEN_COL):
+        #         for y in range(capture.SCREEN_ROW):
+        #             # Slice the image to chunks
+        #             chunk_array = frame_array[
+        #                     y*capture.CHUNK_SIZE:min((y+1)*capture.CHUNK_SIZE, capture.SCREEN_HEIGHT),
+        #                     x*capture.CHUNK_SIZE:min((x+1)*capture.CHUNK_SIZE, capture.SCREEN_WIDTH)
+        #                 ]
+                        
+        #             # Save to jpg
+        #             _, frame_encoded = capture.cv2.imencode('.jpg', 
+        #                 chunk_array, [int(capture.cv2.IMWRITE_JPEG_QUALITY), 100]
+        #             )
+
+        #             # Convert to base64
+        #             b64str =  "data:image/jpeg;base64,"+str(capture.base64.b64encode(frame_encoded).decode('ascii'))
+
+        #             # Compare and send only changed chunk
+        #             current_chunk = capture.CURRENT_SCREEN.get((x,y), None)
+        #             if current_chunk != b64str:
+        #                 if not new_image.get(x):
+        #                     new_image[x] = {}
+        #                 new_image[x][y] = b64str
+        #                 if not capture.CURRENT_SCREEN.get(x):
+        #                     capture.CURRENT_SCREEN[x] = {}
+        #                 capture.CURRENT_SCREEN[x][y] = b64str
+
 @sio.on('connect')
 def connect():
     print("Connected")
-    screen_data = capture.grabScreen(new_session=True)
-    if screen_data:
-        sio.emit('image_change', {'data': screen_data })
+    if capture.CURRENT_SCREEN:
+        sio.emit('image_change', {'data': capture.CURRENT_SCREEN })
     global thread
     with thread_lock:
         if thread is None:

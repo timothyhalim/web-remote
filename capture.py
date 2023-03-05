@@ -3,10 +3,7 @@ import cv2
 import base64
 import numpy as np
 import math
-from ctypes import (
-    windll, Structure, byref, c_long,
-    c_char, c_wchar
-)
+from ctypes import windll, Structure, byref, c_long
 
 CURRENT_SCREEN = {}
 SCREEN_WIDTH = 0
