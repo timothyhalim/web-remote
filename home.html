@@ -54,14 +54,17 @@
         <div class="imgbox">
             <div id="desktop" class="center-fit">
                 <div id="cover"></div>
-                <img id="screen" src="{{ url_for('video_feed') }}">
-                <!-- {%for y in range(0, width)%}
-                    <div class="row">
-                        {%for x in range(0, height)%}
-                            <img id="desktop-{{ '{:03d}'.format(x) }}{{ '{:03d}'.format(y) }}" src={{data[x][y]}}>
-                        {%endfor%}
-                    </div>
-                {%endfor%} -->
+                {% if split %}
+                    {%for y in range(0, width)%}
+                        <div class="row">
+                            {%for x in range(0, height)%}
+                                <img id="desktop-{{ '{:03d}'.format(x) }}{{ '{:03d}'.format(y) }}" src={{data[x][y]}}>
+                            {%endfor%}
+                        </div>
+                    {%endfor%}}
+                {% else %}
+                    <img id="screen" src="{{ url_for('video_feed') }}">
+                {% endif %}
             </div>
         </div>
         <script src="https://cdn.socket.io/4.4.1/socket.io.min.js" integrity="sha384-fKnu0iswBIqkjxrhQCTZ7qlLHOFEgNkRmK2vaO/LbTZSXdJfAu6ewRBdwHPhBo/H" crossorigin="anonymous"></script>
@@ -81,29 +84,37 @@
                 return false;
             };
 
-            const sock = io();
+            {% if split %}
+                const recv = io();
 
-            // sock.on('image_change', data => {
-            //     for (const row in data.data) {
-            //         for (const col in data.data) {
-            //             var chunk = document.getElementById(
-            //                 "desktop-"
-            //                 +String(row).padStart(3, '0')
-            //                 +String(col).padStart(3, '0')
-            //             );
-            //             if (chunk !== null){
-            //                 var d = data.data[row][col];
-            //                 if (d !== undefined) {chunk.src = d;}
-            //             }
-            //         }
-            //     };
-            // });
+                recv.on('image_change', data => {
+                    for (const row in data.data) {
+                        for (const col in data.data) {
+                            var chunk = document.getElementById(
+                                "desktop-"
+                                +String(row).padStart(3, '0')
+                                +String(col).padStart(3, '0')
+                            );
+                            if (chunk !== null){
+                                var d = data.data[row][col];
+                                if (d !== undefined) {chunk.src = d;}
+                            }
+                        }
+                    };
+                });
+            {% endif %}
 
+            const send = io();
             // Keep Aspect ratio of screen
             document.body.onresize = handleResize;
             function handleResize(event) {
-                var maxwidth = document.body.scrollWidth
-                var maxheight = document.body.scrollHeight
+                {% if split %}
+                    var maxwidth = document.body.scrollWidth/{{height}};
+                    var maxheight = document.body.scrollHeight/{{width}};
+                {% else %}
+                    var maxwidth = document.body.scrollWidth;
+                    var maxheight = document.body.scrollHeight;
+                {% endif %}
                 for (const img of document.getElementsByTagName('img')) {
                     img.style.maxWidth = maxwidth + "px";
                     img.style.maxHeight = maxheight + "px";
@@ -115,8 +126,8 @@
                 event.stopPropagation(); // not necessary in my case, could leave in case stopImmediateProp isn't available? 
                 event.stopImmediatePropagation();
                 var btn = event.button
-                if (btn==2) {sock.emit('mouseevent', {'key':'right_down'});}
-                else {sock.emit('mouseevent', {'key':'left_down'});}
+                if (btn==2) {send.emit('mouseevent', {'key':'right_down'});}
+                else {send.emit('mouseevent', {'key':'left_down'});}
             }
 
             function handleMouseUp(event) {
@@ -124,8 +135,8 @@
                 event.stopPropagation(); // not necessary in my case, could leave in case stopImmediateProp isn't available? 
                 event.stopImmediatePropagation();
                 var btn = event.button
-                if (btn==2) {sock.emit('mouseevent', {'key':'right_up'});}
-                else {sock.emit('mouseevent', {'key':'left_up'});}
+                if (btn==2) {send.emit('mouseevent', {'key':'right_up'});}
+                else {send.emit('mouseevent', {'key':'left_up'});}
             }
 
             function handleMouseMove(event) {
@@ -142,7 +153,7 @@
                                 x: (event.targetTouches[0].pageX - rect.left)/rect.width,
                                 y: (event.targetTouches[0].pageY - rect.top)/rect.height
                             };
-                            sock.emit('mousemove', {'pos':cursorpos});
+                            send.emit('mousemove', {'pos':cursorpos});
                         }
                     }
                 }
@@ -156,7 +167,7 @@
                             x: Math.min((event.pageX - rect.left)/rect.width, 1),
                             y: Math.min((event.pageY - rect.top)/rect.height, 1)
                         };
-                        sock.emit('mousemove', {'pos':cursorpos});
+                        send.emit('mousemove', {'pos':cursorpos});
                     }
                 }
             }
@@ -179,10 +190,10 @@
                     if (mousebtn==2) {
                         if (executed==0) {
                             executed = 1;
-                            sock.emit('rightclick');
+                            send.emit('rightclick');
                         }
                     } else {
-                        sock.emit('mouseclick');
+                        send.emit('mouseclick');
                     }
                 };
                 if (timer) {
@@ -195,7 +206,7 @@
             function handleKeypress(event) {
                 event.preventDefault()
                 event = event || window.event;
-                sock.emit('key', {
+                send.emit('key', {
                     'key':event.code, 
                     'alt':event.altKey, 
                     'ctrl':event.ctrlKey, 
