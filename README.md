@@ -5,7 +5,7 @@ Screen sharing and control desktop through browser, powered by Python
 ## Requirements:
 - Flask (Main Server)
 - Flask-SocketIO (Transfer data using websocket)
-- mss (Screenshot)
+- pywin32 (Screenshot and communicate with windows)
 - numpy (Image manipulation)
 - opencv-python (Image processing)
 

@@ -1,6 +1,15 @@
-<html>
+<!DOCTYPE html>
+<html lang="en">
     <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Screen Share</title>
         <style>
+            body {
+                touch-action: pinch-zoom;
+                overflow: hidden;
+            }
             * {
                 margin: 0;
                 padding: 0;
@@ -31,95 +40,138 @@
                 max-height: 100%;
             }
 
+            #cover {
+                position:absolute;
+                z-index: 1000;
+                background: transparent;
+                width: 100%;
+                height: 100%;
+            }
 
         </style>
     </head>
     <body>
         <div class="imgbox">
             <div id="desktop" class="center-fit">
-                {%for y in range(0, width)%}
+                <div id="cover"></div>
+                <img id="screen" src="{{ url_for('video_feed') }}">
+                <!-- {%for y in range(0, width)%}
                     <div class="row">
                         {%for x in range(0, height)%}
                             <img id="desktop-{{ '{:03d}'.format(x) }}{{ '{:03d}'.format(y) }}" src={{data[x][y]}}>
                         {%endfor%}
                     </div>
-                {%endfor%}
+                {%endfor%} -->
             </div>
         </div>
         <script src="https://cdn.socket.io/4.4.1/socket.io.min.js" integrity="sha384-fKnu0iswBIqkjxrhQCTZ7qlLHOFEgNkRmK2vaO/LbTZSXdJfAu6ewRBdwHPhBo/H" crossorigin="anonymous"></script>
         <script type="text/javascript">
         (() => {
             var desktop = document.getElementById("desktop");
+            var cover = document.getElementById("cover");
             var mousemoved = false;
+            var mousepos = {x:0, y:0}
             var mousebtn = 0;
             var executed = 0;
 
+            function disable(event) {
+                event.preventDefault();
+                event.stopPropagation(); // not necessary in my case, could leave in case stopImmediateProp isn't available? 
+                event.stopImmediatePropagation();
+                return false;
+            };
+
             const sock = io();
 
-            sock.on('image_change', data => {
-                for (const row in data.data) {
-                    for (const col in data.data) {
-                        var chunk = document.getElementById(
-                            "desktop-"
-                            +String(row).padStart(3, '0')
-                            +String(col).padStart(3, '0')
-                        );
-                        if (chunk !== null){
-                            var d = data.data[row][col];
-                            if (d !== undefined) {chunk.src = d;}
-                        }
-                    }
-                };
-            });
+            // sock.on('image_change', data => {
+            //     for (const row in data.data) {
+            //         for (const col in data.data) {
+            //             var chunk = document.getElementById(
+            //                 "desktop-"
+            //                 +String(row).padStart(3, '0')
+            //                 +String(col).padStart(3, '0')
+            //             );
+            //             if (chunk !== null){
+            //                 var d = data.data[row][col];
+            //                 if (d !== undefined) {chunk.src = d;}
+            //             }
+            //         }
+            //     };
+            // });
 
             // Keep Aspect ratio of screen
             document.body.onresize = handleResize;
             function handleResize(event) {
-                var maxwidth = document.body.scrollWidth/{{height}};
-                var maxheight = document.body.scrollHeight/{{width}};
+                var maxwidth = document.body.scrollWidth
+                var maxheight = document.body.scrollHeight
                 for (const img of document.getElementsByTagName('img')) {
-                    img.style.maxWidth = maxwidth;
-                    img.style.maxHeight = maxheight;
+                    img.style.maxWidth = maxwidth + "px";
+                    img.style.maxHeight = maxheight + "px";
                 }
             }
-            handleResize();
-
-            function handleClick(event) {
-                event.preventDefault()
+            
+            function handleMouseDown(event) {
+                event.preventDefault();
+                event.stopPropagation(); // not necessary in my case, could leave in case stopImmediateProp isn't available? 
+                event.stopImmediatePropagation();
                 var btn = event.button
-                if (btn==2) {sock.emit('rightclick');}
-                else {sock.emit('mouseclick');}
+                if (btn==2) {sock.emit('mouseevent', {'key':'right_down'});}
+                else {sock.emit('mouseevent', {'key':'left_down'});}
+            }
+
+            function handleMouseUp(event) {
+                event.preventDefault();
+                event.stopPropagation(); // not necessary in my case, could leave in case stopImmediateProp isn't available? 
+                event.stopImmediatePropagation();
+                var btn = event.button
+                if (btn==2) {sock.emit('mouseevent', {'key':'right_up'});}
+                else {sock.emit('mouseevent', {'key':'left_up'});}
             }
 
             function handleMouseMove(event) {
                 var rect = desktop.getBoundingClientRect();
-                
-                mousemoved = true;
-                
+
                 if (event.targetTouches) {
                     if (event.targetTouches.length==1) {
-                        // One finger move
-                        mousePos = {
-                            x: (event.targetTouches[0].pageX - rect.left)/rect.width,
-                            y: (event.targetTouches[0].pageY - rect.top)/rect.height
-                        };
-                        sock.emit('mouse', {'pos':mousePos});
+                        if (Math.abs(mousepos.x - event.targetTouches[0].pageX) > 0 
+                        && Math.abs(mousepos.y - event.targetTouches[0].pageY) > 0) {
+                            mousemoved = true;
+                        
+                            // One finger move
+                            cursorpos = {
+                                x: (event.targetTouches[0].pageX - rect.left)/rect.width,
+                                y: (event.targetTouches[0].pageY - rect.top)/rect.height
+                            };
+                            sock.emit('mousemove', {'pos':cursorpos});
+                        }
                     }
                 }
                 else {
                     // Cursor move
-                    mousePos = {
-                        x: (event.pageX - rect.left)/rect.width,
-                        y: (event.pageY - rect.top)/rect.height
-                    };
-                    sock.emit('mouse', {'pos':mousePos});
+                    cpx = (event.pageX - rect.left)/rect.width
+                    cpy = (event.pageY - rect.top)/rect.height
+
+                    if (cpx <= 1 && cpy <= 1) {
+                        cursorpos = {
+                            x: Math.min((event.pageX - rect.left)/rect.width, 1),
+                            y: Math.min((event.pageY - rect.top)/rect.height, 1)
+                        };
+                        sock.emit('mousemove', {'pos':cursorpos});
+                    }
                 }
             }
 
+            var timer
             function handleTouchStart(event) {
                 mousemoved = false;
+                mousepos = {x:event.targetTouches[0].pageX,  y:event.targetTouches[0].pageY}
                 mousebtn = event.targetTouches.length;
                 executed = 0;
+                if (mousebtn==1) {
+                    timer = setTimeout(() => {
+                        if (!mousemoved) {handleMouseDown(event)}
+                    }, 800);
+                }
             }
 
             function handleTouchEnd(event) {
@@ -133,6 +185,11 @@
                         sock.emit('mouseclick');
                     }
                 };
+                if (timer) {
+                    clearTimeout(timer);
+                    timer = null;
+                    handleMouseUp(event)
+                }
             }
 
             function handleKeypress(event) {
@@ -147,13 +204,19 @@
             }
             
             desktop.focus()
-            desktop.onclick = handleClick;
-            desktop.oncontextmenu = handleClick;
             desktop.onmousemove = handleMouseMove;
             desktop.ontouchmove = handleMouseMove;
             desktop.ontouchstart = handleTouchStart;
             desktop.ontouchend = handleTouchEnd;
+            desktop.onmousedown = handleMouseDown;
+            desktop.onmouseup = handleMouseUp; 
             window.onkeydown = handleKeypress;
+            window.onclick = disable;
+            window.oncontextmenu = disable;
+            window.ondragstart = disable;
+            window.ondrop = disable;
+
+            handleResize();
         })();
         </script>
     </body>

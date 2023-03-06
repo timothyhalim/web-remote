@@ -1,9 +1,9 @@
-from mss import mss
+from win32 import win32api
+import ss
 import cv2
 import base64
 import numpy as np
 import math
-from ctypes import windll, Structure, byref, c_long
 
 CURRENT_SCREEN = {}
 SCREEN_WIDTH = 0
@@ -23,70 +23,96 @@ def grabScreen(new_session=False):
         CURRENT_SCREEN = {}
     
     new_image = {}
-    with mss() as sct:
-        monitor = sct.monitors[0]
-        SCREEN_WIDTH = monitor['width']
-        SCREEN_HEIGHT = monitor['height']
-        SCREEN_COL = math.ceil(SCREEN_WIDTH/CHUNK_SIZE)
-        SCREEN_ROW = math.ceil(SCREEN_HEIGHT/CHUNK_SIZE)
 
-        image = sct.grab(sct.monitors[0])
-        frame_array = np.array(image)
-        for x in range(SCREEN_COL):
-            for y in range(SCREEN_ROW):
-                # Slice the image to chunks
-                chunk_array = frame_array[
-                        y*CHUNK_SIZE:min((y+1)*CHUNK_SIZE, SCREEN_HEIGHT),
-                        x*CHUNK_SIZE:min((x+1)*CHUNK_SIZE, SCREEN_WIDTH)
-                    ]
-                    
-                # Save to jpg
-                _, frame_encoded = cv2.imencode('.jpg', 
-                    chunk_array, [int(cv2.IMWRITE_JPEG_QUALITY), 100]
-                )
+    monitor = ss.get_display_resolution()
+    SCREEN_WIDTH = monitor['width']
+    SCREEN_HEIGHT = monitor['height']
+    SCREEN_COL = math.ceil(SCREEN_WIDTH/CHUNK_SIZE)
+    SCREEN_ROW = math.ceil(SCREEN_HEIGHT/CHUNK_SIZE)
 
-                # Convert to base64
-                b64str =  "data:image/jpeg;base64,"+str(base64.b64encode(frame_encoded).decode('ascii'))
+    image = ss.screenshot()
+    frame_array = np.array(image)
+    for x in range(SCREEN_COL):
+        for y in range(SCREEN_ROW):
+            # Slice the image to chunks
+            chunk_array = frame_array[
+                    y*CHUNK_SIZE:min((y+1)*CHUNK_SIZE, SCREEN_HEIGHT),
+                    x*CHUNK_SIZE:min((x+1)*CHUNK_SIZE, SCREEN_WIDTH)
+                ]
+                
+            # Save to jpg
+            _, frame_encoded = cv2.imencode('.jpg', 
+                chunk_array, [int(cv2.IMWRITE_JPEG_QUALITY), 100]
+            )
 
-                # Compare and send only changed chunk
-                current_chunk = CURRENT_SCREEN.get((x,y), None)
-                if current_chunk != b64str:
-                    if not new_image.get(x):
-                        new_image[x] = {}
-                    new_image[x][y] = b64str
-                    if not CURRENT_SCREEN.get(x):
-                        CURRENT_SCREEN[x] = {}
-                    CURRENT_SCREEN[x][y] = b64str
+            # Convert to base64
+            b64str =  "data:image/jpeg;base64,"+str(base64.b64encode(frame_encoded).decode('ascii'))
+
+            # Compare and send only changed chunk
+            current_chunk = CURRENT_SCREEN.get((x,y), None)
+            if current_chunk != b64str:
+                if not new_image.get(x):
+                    new_image[x] = {}
+                new_image[x][y] = b64str
+                if not CURRENT_SCREEN.get(x):
+                    CURRENT_SCREEN[x] = {}
+                CURRENT_SCREEN[x][y] = b64str
  
     if new_session:
         return CURRENT_SCREEN
     else:
         return new_image
 
-class POINT(Structure):
-    _fields_ = [("x", c_long), ("y", c_long)]
+def grabScreen2():
+    global SCREEN_WIDTH
+    global SCREEN_HEIGHT
+
+    monitor = ss.get_display_resolution()
+    SCREEN_WIDTH = monitor['width']
+    SCREEN_HEIGHT = monitor['height']
+
+    while True:
+        data = ss.screenshot(**monitor)
+        image = np.frombuffer(bytearray(data), dtype=np.uint8)
+        image = image.reshape((SCREEN_HEIGHT, SCREEN_WIDTH, 4))
+        _, buffer = cv2.imencode('.jpg', 
+            image, [int(cv2.IMWRITE_JPEG_QUALITY), 100]
+        )
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+                
 
 def getMousePos():
-    pt = POINT()
-    windll.user32.GetCursorPos(byref(pt))
-    return { "x": pt.x, "y": pt.y}
+    return win32api.GetCursorPos()
 
 def setMousePos(x, y):
-    windll.user32.SetCursorPos(int(x*SCREEN_WIDTH), int(y*SCREEN_HEIGHT))
+    win32api.SetCursorPos((int(x*SCREEN_WIDTH), int(y*SCREEN_HEIGHT)))
+
+MOUSEACTION = {
+    'left_down': 0x0002,
+    'left_up': 0x0004,
+    'right_down': 0x0008,
+    'right_up': 0x0010,
+}
+
+def mouseEvent(key):
+    action = MOUSEACTION.get(key)
+    if action:
+        win32api.mouse_event(action, 0, 0, 0, 0)
 
 def click():
-    MOUSEEVENTF_LEFTDOWN = 0x0002
-    MOUSEEVENTF_LEFTUP = 0x0004
-    MOUSEEVENTF_CLICK = MOUSEEVENTF_LEFTDOWN + MOUSEEVENTF_LEFTUP
-
-    windll.user32.mouse_event(MOUSEEVENTF_CLICK, 0, 0, 0, 0)
+    
+    win32api.mouse_event(
+        MOUSEACTION.get('left_down') + 
+        MOUSEACTION.get('left_up'), 
+        0, 0, 0, 0)
 
 def rightclick():
-    MOUSEEVENTF_RIGHTDOWN = 0x0008 
-    MOUSEEVENTF_RIGHTUP = 0x0010
-    MOUSEEVENTF_RIGHTCLICK = MOUSEEVENTF_RIGHTDOWN + MOUSEEVENTF_RIGHTUP
-
-    windll.user32.mouse_event(MOUSEEVENTF_RIGHTCLICK, 0, 0, 0, 0)
+    win32api.mouse_event(
+        MOUSEACTION.get('right_down') + 
+        MOUSEACTION.get('right_up'), 
+        0, 0, 0, 0)
 
 def keypress(key, alt=False, ctrl=False, shift=False):
     key_map = {
@@ -236,14 +262,14 @@ def keypress(key, alt=False, ctrl=False, shift=False):
         shift_key = key_map.get("Shift")
         ctrl_key = key_map.get("Ctrl")
         alt_key = key_map.get("Alt")
-        if shift: windll.user32.keybd_event(shift_key, 0, 0, 0)
-        if ctrl: windll.user32.keybd_event(ctrl_key, 0, 0, 0)
-        if alt: windll.user32.keybd_event(alt_key, 0, 0, 0)
-        windll.user32.keybd_event(vk_key, 0, 0, 0) # Key Down
-        windll.user32.keybd_event(vk_key, 0, 0x0002, 0) # Key Up
-        if shift: windll.user32.keybd_event(shift_key, 0, 0x0002, 0)
-        if ctrl: windll.user32.keybd_event(ctrl_key, 0, 0x0002, 0)
-        if alt: windll.user32.keybd_event(alt_key, 0, 0x0002, 0)
+        if shift: win32api.keybd_event(shift_key, 0, 0, 0)
+        if ctrl: win32api.keybd_event(ctrl_key, 0, 0, 0)
+        if alt: win32api.keybd_event(alt_key, 0, 0, 0)
+        win32api.keybd_event(vk_key, 0, 0, 0) # Key Down
+        win32api.keybd_event(vk_key, 0, 0x0002, 0) # Key Up
+        if shift: win32api.keybd_event(shift_key, 0, 0x0002, 0)
+        if ctrl: win32api.keybd_event(ctrl_key, 0, 0x0002, 0)
+        if alt: win32api.keybd_event(alt_key, 0, 0x0002, 0)
     else:
         print("Unknown key: %s" %key)
     # print(code)12110645
